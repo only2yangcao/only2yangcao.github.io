@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<html class="theme-next mist" lang="zh-CN">
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+
+
+  
+  
+    
+  
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css">
+
+
+
+  
+  
+    
+      
+    
+    
+      
+    
+  <script src="//cdn.jsdelivr.net/npm/pace-js@1.0.2/pace.min.js"></script>
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/pace-js@1.0.2/themes/blue/pace-theme-minimal.css">
+
+
+
+
+
+  <meta http-equiv="Cache-Control" content="no-transform">
+  <meta http-equiv="Cache-Control" content="no-siteapp">
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    
+  
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/fancybox@3.0.0/dist/css/jquery.fancybox.min.css">
+
+
+
+
+
+
+
+  
+
+<link rel="stylesheet" href="//cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+
+<link rel="stylesheet" href="/css/main.css?v=7.0.1">
+
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.ico?v=7.0.1">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon.ico?v=7.0.1">
+
+
+
+
+
+
+
+
+<script id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Mist',
+    version: '7.0.1',
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false,"dimmer":false},
+    back2top: true,
+    back2top_sidebar: false,
+    fancybox: true,
+    fastclick: true,
+    lazyload: true,
+    tabs: true,
+    motion: {"enable":false,"async":true,"transition":{"post_block":"fadeIn","post_header":"fadeIn","post_body":"fadeIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+<script type="text/javascript">
+  var _paq = _paq || [];
+  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+  _paq.push(['trackPageView']);
+  _paq.push(['enableLinkTracking']);
+  (function() {
+    var u="//st.flyhigher.top/";
+    _paq.push(['setTrackerUrl', u+'piwik.php']);
+    _paq.push(['setSiteId', '2']);
+    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+    g.type='text/javascript'; g.async=true; g.defer=true; g.src=u+'piwik.js'; s.parentNode.insertBefore(g,s);
+  })();
+</script>
+
+  <meta name="description" content="Presto是一款优秀的开源OLAP组件，其MPP架构有很好的数据量和灵活性支持。相信大部分使用Presto的同学都有丰富的Hive使用经验，习惯了HQL的语法，写Presto SQL时常常遇到类型不匹配的报错。这是因为，Hive会隐式的对数据类型做兼容性转换，而Presto严格要求数据类型，必须显式的使用CAST强制转换。这为日常使用带来不少麻烦，特别是有业务需要从Hive迁移到Presto时。">
+<meta name="keywords" content="Presto">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Presto隐式类型转换轻量级方案">
+<meta property="og:url" content="https://only2yangcao.github.io/2019/03/29/2019-03-29-Presto隐式类型转换/index.html">
+<meta property="og:site_name" content="孜孜不倦">
+<meta property="og:description" content="Presto是一款优秀的开源OLAP组件，其MPP架构有很好的数据量和灵活性支持。相信大部分使用Presto的同学都有丰富的Hive使用经验，习惯了HQL的语法，写Presto SQL时常常遇到类型不匹配的报错。这是因为，Hive会隐式的对数据类型做兼容性转换，而Presto严格要求数据类型，必须显式的使用CAST强制转换。这为日常使用带来不少麻烦，特别是有业务需要从Hive迁移到Presto时。">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-04-03T05:39:55.752Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Presto隐式类型转换轻量级方案">
+<meta name="twitter:description" content="Presto是一款优秀的开源OLAP组件，其MPP架构有很好的数据量和灵活性支持。相信大部分使用Presto的同学都有丰富的Hive使用经验，习惯了HQL的语法，写Presto SQL时常常遇到类型不匹配的报错。这是因为，Hive会隐式的对数据类型做兼容性转换，而Presto严格要求数据类型，必须显式的使用CAST强制转换。这为日常使用带来不少麻烦，特别是有业务需要从Hive迁移到Presto时。">
+
+
+
+
+
+  
+  
+  <link rel="canonical" href="https://only2yangcao.github.io/2019/03/29/2019-03-29-Presto隐式类型转换/">
+
+
+
+<script id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>Presto隐式类型转换轻量级方案 | 孜孜不倦</title>
+  
+
+
+
+
+
+
+  <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "https://hm.baidu.com/hm.js?db5a55d89cc89dd77ff08de18d30e45f";
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(hm, s);
+    })();
+  </script>
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .motion-element,
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-title { opacity: initial; }
+
+  .use-motion .logo,
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-CN">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">孜孜不倦</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="切换导航栏">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+
+    
+    
+    
+      
+    
+
+    
+      
+    
+
+    <a href="/" rel="section"><i class="menu-item-icon fa fa-fw fa-home"></i> <br>首页</a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+
+    
+    
+    
+      
+    
+
+    
+      
+    
+
+    <a href="/tags/" rel="section"><i class="menu-item-icon fa fa-fw fa-tags"></i> <br>标签<span class="badge">3</span></a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+
+    
+    
+    
+      
+    
+
+    
+      
+    
+
+    <a href="/categories/" rel="section"><i class="menu-item-icon fa fa-fw fa-th"></i> <br>分类<span class="badge">2</span></a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+
+    
+    
+    
+      
+    
+
+    
+      
+    
+
+    <a href="/archives/" rel="section"><i class="menu-item-icon fa fa-fw fa-archive"></i> <br>归档<span class="badge">2</span></a>
+
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+
+    
+    
+    
+      
+    
+
+    
+      
+    
+
+    <a href="/about/" rel="section"><i class="menu-item-icon fa fa-fw fa-user"></i> <br>关于</a>
+
+  </li>
+
+      
+      
+    </ul>
+  
+
+  
+    
+
+  
+
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://only2yangcao.github.io/2019/03/29/2019-03-29-Presto隐式类型转换/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="杨操">
+      <meta itemprop="description" content="孜孜不倦，勤能补拙">
+      <meta itemprop="image" content="/uploads/头像.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="孜孜不倦">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h2 class="post-title" itemprop="name headline">Presto隐式类型转换轻量级方案
+
+              
+            
+          </h2>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+
+              
+                
+              
+
+              <time title="创建时间：2019-03-29 00:00:00" itemprop="dateCreated datePublished" datetime="2019-03-29T00:00:00+08:00">2019-03-29</time>
+            
+
+            
+              
+
+              
+                
+                <span class="post-meta-divider">|</span>
+                
+
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">更新于</span>
+                
+                <time title="修改时间：2019-04-03 13:39:55" itemprop="dateModified" datetime="2019-04-03T13:39:55+08:00">2019-04-03</time>
+              
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/大数据/" itemprop="url" rel="index"><span itemprop="name">大数据</span></a></span>
+
+                
+                
+                  ，
+                
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/大数据/OLAP/" itemprop="url" rel="index"><span itemprop="name">OLAP</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+            
+              
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+            
+                <span class="post-meta-item-text">评论数：</span>
+                <a href="/2019/03/29/2019-03-29-Presto隐式类型转换/#comments" itemprop="discussionUrl">
+                  <span class="post-comments-count disqus-comment-count" data-disqus-identifier="2019/03/29/2019-03-29-Presto隐式类型转换/" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+            <span id="/2019/03/29/2019-03-29-Presto隐式类型转换/" class="leancloud_visitors" data-flag-title="Presto隐式类型转换轻量级方案">
+              <span class="post-meta-divider">|</span>
+              <span class="post-meta-item-icon">
+                <i class="fa fa-eye"></i>
+              </span>
+              
+                <span class="post-meta-item-text">阅读次数：</span>
+              
+                
+                  
+                    
+                  
+                
+            </span>
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <p><a href="https://prestosql.io" target="_blank" rel="noopener">Presto</a>是一款优秀的开源OLAP组件，其MPP架构有很好的数据量和灵活性支持。相信大部分使用Presto的同学都有丰富的Hive使用经验，习惯了HQL的语法，写Presto SQL时常常遇到<code>类型不匹配</code>的报错。这是因为，Hive会隐式的对数据类型做兼容性转换，而Presto严格要求数据类型，必须显式的使用CAST强制转换。这为日常使用带来不少麻烦，特别是有业务需要从Hive迁移到Presto时。</p>
+<p><strong>让Presto像Hive一样支持隐式类型转换，是个不错的解决方案。</strong></p>
+<h2 id="1-Hive的隐式类型转换规则"><a href="#1-Hive的隐式类型转换规则" class="headerlink" title="1. Hive的隐式类型转换规则"></a>1. Hive的隐式类型转换规则</h2><p>先了解一下Hive的隐式类型转换规则，参见<a href="https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Types" target="_blank" rel="noopener">Apache Wiki</a>，简单整理后如下表所示，<strong>多个不同的数据类型，将转换为最小公共类型</strong>。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">type</th>
+<th style="text-align:left">bl</th>
+<th style="text-align:left">tinyint</th>
+<th style="text-align:left">si</th>
+<th style="text-align:left">int</th>
+<th style="text-align:left">bigint</th>
+<th style="text-align:left">float</th>
+<th style="text-align:left">double</th>
+<th>dm</th>
+<th>string</th>
+<th>vc</th>
+<th>ts</th>
+<th>date</th>
+<th>ba</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">boolean</td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">tinyint</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">smallint</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">int</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">bigint</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">float</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">double</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">decimal</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">string</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">varchar</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">ts</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">date</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="green">TRUE</font></td>
+<td><font color="red">FALSE</font></td>
+</tr>
+<tr>
+<td style="text-align:left">binary</td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td style="text-align:left"><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="red">FALSE</font></td>
+<td><font color="green">TRUE</font></td>
+</tr>
+</tbody>
+</table>
+<p>当然这里只整理了常用的数据类型，足够覆盖99%的业务场景了。</p>
+<p>如果需要，Hive将使用上面的转换规则，对各种运算符、函数进行隐式类型转换。例如在Hive中最常用时间作为分区字段，一般按天分区，将时间format为<code>yyyyMMdd</code>格式，数据类型为字符串。执行如下HQL：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from table where dt=20190329 limit 10;</span><br></pre></td></tr></table></figure>
+<p>dt分区字段数据类型为string，值20190329数据类型为int，查表可知，<strong>Hive会把dt和20190329都转换为double类型做关系计算</strong>。</p>
+<p>该SQL在Presto中会直接抛出异常，因为关系运算符<code>=</code>的左值和右值不匹配，修改如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from table where dt=cast(20190329 as varchar); //注意presto中没有string类型</span><br></pre></td></tr></table></figure>
+<p>这里不一定要转换为varchar，只要是公共类型即可。</p>
+<p><strong>规则并不是绝对的，在某些情况下，Hive转换规则会被打破，或者说这本身也是规则的一部分。</strong></p>
+<p>例1：boolean类型无法隐式转换为其他任何类型，但是进行关系运算时，将隐式转换为数字1</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">hive&gt; select 1 = true;</span><br><span class="line">OK</span><br><span class="line">true</span><br><span class="line">Time taken: 1.512 seconds, Fetched: 1 row(s)</span><br><span class="line">hive&gt; select 1 &gt; true;</span><br><span class="line">OK</span><br><span class="line">false</span><br><span class="line">Time taken: 0.306 seconds, Fetched: 1 row(s)</span><br></pre></td></tr></table></figure>
+<p>例2：int和bigint的最小公共类型为bigint，但是做除法运算时，将隐式转换为double，结果也为double类型</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">hive&gt; select cast(1 as int) / cast(2 as bigint);</span><br><span class="line">OK</span><br><span class="line">0.5</span><br><span class="line">Time taken: 0.208 seconds, Fetched: 1 row(s)</span><br></pre></td></tr></table></figure>
+<p><strong>可以通过运算符、函数覆盖性测试，找出那些特殊的场景。</strong></p>
+<h2 id="2-Presto实现隐式类型转换"><a href="#2-Presto实现隐式类型转换" class="headerlink" title="2. Presto实现隐式类型转换"></a>2. Presto实现隐式类型转换</h2><p>Presto其实有一定隐式类型转换能力，只是局限在数字类型，包括整型和浮点型，转换规则与Hive一致。</p>
+<p>Presto不支持boolean、数字、字符串之间的转换。</p>
+<p>Presto社区关于此问题的讨论：<a href="https://github.com/prestosql/presto/issues/116" target="_blank" rel="noopener">https://github.com/prestosql/presto/issues/116</a></p>
+<p>社区有所顾虑，但尽快支持隐式类型转换，无疑是Hive和Presto双重度用户的迫切需求。</p>
+<p><strong>思路：既然可以显式CAST转换，那么只需要隐式的插入一个CAST即可最轻量的完成转换。这相当于自动给SQL增加了CAST函数，兼容性上也绝对没有任何问题。</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">有两个原则需要牢记：</span><br><span class="line">  - 我们并不打算重新造一套隐式类型转换规则，与Hive保持一致即可</span><br><span class="line">  - 我们也没有必要实现全部场景的隐式类型转换，目标是满足业务需求，可逐步迭代</span><br></pre></td></tr></table></figure>
+<p>这里直接列出几个Presto源码修改点，根据我的业务场景，实现了必要的几个类型转换：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">class</th>
+<th style="text-align:left">method</th>
+<th style="text-align:left">desc</th>
+<th style="text-align:left">support</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitComparisonExpression</td>
+<td style="text-align:left">关系运算符</td>
+<td style="text-align:left">✅</td>
+</tr>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitArithmeticBinary</td>
+<td style="text-align:left">算术二元运算符</td>
+<td style="text-align:left">✅</td>
+</tr>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitArithmeticUnary</td>
+<td style="text-align:left">算术一元运算符</td>
+<td style="text-align:left">❌</td>
+</tr>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitBetweenPredicate</td>
+<td style="text-align:left">between … and …</td>
+<td style="text-align:left">✅</td>
+</tr>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitSubscriptExpression</td>
+<td style="text-align:left">下标表达式</td>
+<td style="text-align:left">❌</td>
+</tr>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitLogicalBinaryExpression</td>
+<td style="text-align:left">逻辑运算符</td>
+<td style="text-align:left">❌</td>
+</tr>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitInPredicate</td>
+<td style="text-align:left">in</td>
+<td style="text-align:left">✅</td>
+</tr>
+<tr>
+<td style="text-align:left">ExpressionAnalyzer</td>
+<td style="text-align:left">visitFunctionCall</td>
+<td style="text-align:left">函数(sum avg concat)</td>
+<td style="text-align:left">✅</td>
+</tr>
+</tbody>
+</table>
+<p>例如，关系运算会调用<code>visitComparisonExpression</code>方法做类型校验，源码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">protected Type visitComparisonExpression(ComparisonExpression node, StackableAstVisitorContext&lt;Context&gt; context)</span><br><span class="line">&#123;</span><br><span class="line">    OperatorType operatorType = OperatorType.valueOf(node.getType().name());</span><br><span class="line">    return getOperator(context, node, operatorType, node.getLeft(), node.getRight());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>node.getLeft()</code>和<code>node.getRight()</code>分别对应着关系运算符的左值和右值。</p>
+<p>在这里提前判断左值和右值是否需要转换，如需转换，则插入CAST，例如将右值转换为double：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Cast cast = new Cast(node.getRight(), DoubleType.DOUBLE.getDisplayName());</span><br><span class="line">node.setRight(cast);</span><br><span class="line">process(cast, context);</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+
+    
+
+    
+    
+    
+
+    
+
+    
+      
+    
+    
+      <div>
+        <div id="reward-container">
+  <div>如果这篇文章对你有帮助，那么不妨？</div>
+  <button id="reward-button" disable="enable" onclick="var qr = document.getElementById(&quot;qr&quot;); qr.style.display = (qr.style.display === 'none') ? 'block' : 'none';">
+    打赏
+  </button>
+  <div id="qr" style="display: none;">
+
+    
+      
+      
+        
+      
+      <div style="display: inline-block">
+        <img src="/images/wechatpay.jpg" alt="杨操 微信支付">
+        <p>微信支付</p>
+      </div>
+    
+      
+      
+        
+      
+      <div style="display: inline-block">
+        <img src="/images/alipay.jpg" alt="杨操 支付宝">
+        <p>支付宝</p>
+      </div>
+    
+
+  </div>
+</div>
+
+      </div>
+    
+
+    
+      <div>
+        
+
+
+
+
+  
+
+
+
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>杨操</li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    
+    <a href="https://only2yangcao.github.io/2019/03/29/2019-03-29-Presto隐式类型转换/" title="Presto隐式类型转换轻量级方案">https://only2yangcao.github.io/2019/03/29/2019-03-29-Presto隐式类型转换/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/zh-CN" rel="noopener" target="_blank"><i class="fa fa-fw fa-creative-commons"></i>BY-NC-SA</a> 许可协议。转载请注明出处！</li>
+</ul>
+
+      </div>
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/Presto/" rel="tag"># Presto</a>
+          
+        </div>
+      
+
+      
+      
+        <div class="post-widgets">
+        
+
+        
+
+        
+          
+          <div class="social_share">
+            
+            
+              <div id="needsharebutton-postbottom">
+                <span class="btn">
+                  <i class="fa fa-share-alt" aria-hidden="true"></i>
+                </span>
+              </div>
+            
+            
+          </div>
+        
+        </div>
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2019/04/02/hello-world/" rel="prev" title="Hello World">
+                Hello World <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+    <div class="comments" id="comments">
+      <div id="disqus_thread">
+        <noscript>Please enable JavaScript to view the comments powered by Disqus.</noscript>
+      </div>
+    </div>
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image" src="/uploads/头像.jpg" alt="杨操">
+            
+              <p class="site-author-name" itemprop="name">杨操</p>
+              <div class="site-description motion-element" itemprop="description">孜孜不倦，勤能补拙</div>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">日志</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  
+                    
+                      <a href="/categories/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">2</span>
+                    <span class="site-state-item-name">分类</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  
+                    
+                      <a href="/tags/">
+                    
+                  
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">3</span>
+                    <span class="site-state-item-name">标签</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                </span>
+                  
+                    
+                  
+                  <a href="https://github.com/only2yangcao" title="GitHub &rarr; https://github.com/only2yangcao" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                
+              
+                <span class="links-of-author-item">
+                  
+                  
+                    
+                  
+                </span><br>
+                  
+                    
+                  
+                  <a href="/ycsjsnail@gmail.com" title="Mail &rarr; ycsjsnail@gmail.com"><i class="fa fa-fw fa-envelope"></i>Mail</a>
+                
+              
+            </div>
+          
+
+          
+
+          
+          
+
+          
+            
+          
+          
+
+        </div>
+      </div>
+
+      
+      <!--noindex-->
+        <div class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+            
+            
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-Hive的隐式类型转换规则"><span class="nav-number">1.</span> <span class="nav-text">1. Hive的隐式类型转换规则</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-Presto实现隐式类型转换"><span class="nav-number">2.</span> <span class="nav-text">2. Presto实现隐式类型转换</span></a></li></ol></div>
+            
+
+          </div>
+        </div>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+  
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">  <a href="http://www.miitbeian.gov.cn" rel="noopener" target="_blank"> </a>&copy; <span itemprop="copyrightYear">2019</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">杨操</span>
+
+  
+
+  
+</div>
+
+
+
+
+
+
+
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+          <span id="scrollpercent"><span>0</span>%</span>
+        
+      </div>
+    
+
+    
+
+    
+
+    
+  </div>
+
+  
+
+<script>
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  <script src="//cdn.jsdelivr.net/npm/jquery@2.1.3/dist/jquery.min.js"></script>
+
+  
+  <script src="//cdn.jsdelivr.net/npm/fastclick@1.0.6/lib/fastclick.min.js"></script>
+
+  
+  <script src="//cdn.jsdelivr.net/npm/jquery_lazyload@1.9.3/jquery.lazyload.min.js"></script>
+
+  
+  <script src="https://cdn.jsdelivr.net/npm/velocity-animate@1.2.1/velocity.min.js"></script>
+
+  
+  <script src="//cdn.jsdelivr.net/npm/velocity-animate@1.2.1/velocity.ui.min.js"></script>
+
+  
+  <script src="//cdn.jsdelivr.net/npm/fancybox@3.0.0/dist/js/jquery.fancybox.pack.js"></script>
+
+
+  
+
+
+  <script src="/js/utils.js?v=7.0.1"></script>
+
+  <script src="/js/motion.js?v=7.0.1"></script>
+
+
+
+  
+  
+
+
+  <script src="/js/schemes/muse.js?v=7.0.1"></script>
+
+
+
+
+  
+  <script src="/js/scrollspy.js?v=7.0.1"></script>
+<script src="/js/post-details.js?v=7.0.1"></script>
+
+
+
+  
+
+
+  <script src="/js/next-boot.js?v=7.0.1"></script>
+
+
+  
+
+  
+
+  
+
+  
+  
+  <script id="dsq-count-scr" src="https://yangcao.disqus.com/count.js" async></script>
+
+
+<script>
+  var disqus_config = function() {
+    this.page.url = "https://only2yangcao.github.io/2019/03/29/2019-03-29-Presto隐式类型转换/";
+    this.page.identifier = "2019/03/29/2019-03-29-Presto隐式类型转换/";
+    this.page.title = 'Presto隐式类型转换轻量级方案';
+    };
+  function loadComments() {
+    var d = document, s = d.createElement('script');
+    s.src = 'https://yangcao.disqus.com/embed.js';
+    s.setAttribute('data-timestamp', '' + +new Date());
+    (d.head || d.body).appendChild(s);
+  }
+  
+    loadComments();
+  
+</script>
+
+
+
+
+
+  
+
+
+  
+
+
+
+
+  
+    
+  
+  
+
+  
+
+  
+
+  
+
+  
+  <script>
+    (function(){
+      var bp = document.createElement('script');
+      var curProtocol = window.location.protocol.split(':')[0];
+      bp.src = (curProtocol === 'https') ? 'https://zz.bdstatic.com/linksubmit/push.js' : 'http://push.zhanzhang.baidu.com/push.js';
+      var s = document.getElementsByTagName("script")[0];
+      s.parentNode.insertBefore(bp, s);
+    })();
+  </script>
+
+
+  
+
+  
+  
+  
+    
+  
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+    
+      pbOptions = {};
+      
+        pbOptions.iconStyle = "box";
+      
+        pbOptions.boxForm = "horizontal";
+      
+        pbOptions.position = "bottomCenter";
+      
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+    
+    
+  </script>
+
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+
+  
+</body>
+</html>
